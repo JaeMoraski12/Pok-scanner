@@ -57,4 +57,15 @@ CREATE TABLE Evolutions (
     PRIMARY KEY (from_pokemon_id, to_pokemon_id)
 );
 
+CREATE TABLE GamesChart (
+    game_id INT PRIMARY KEY AUTO_INCREMENT,
+    game_name VARCHAR(50) NOT NULL
+)
+
+CREATE TABLE GameAllocation (
+    pokemon_id INTEGER REFERENCES Pokemon(pokemone_id),
+    game_id INTEGER REFERENCES GamesChart(game_id),
+    PRIMARY KEY (pokemon_id, game_id)
+)
+
 
