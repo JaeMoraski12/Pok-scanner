@@ -68,4 +68,15 @@ CREATE TABLE GameAllocation (
     PRIMARY KEY (pokemon_id, game_id)
 )
 
+CREATE TABLE AiImagesChart (
+    ai_image_id INT PRIMARY KEY AUTO_INCREMENT,
+    image_name VARCHAR(500) NOT NULL
+)
+
+CREATE TABLE AiAllocation (
+    pokemon_id INTEGER REFERENCES Pokemon(pokemon_id),
+    ai_image_id INTEGER REFERENCES AiImagesChart(ai_image_id)
+    PRIMARY KEY (pokemon_id, ai_image_id)
+)
+
 
