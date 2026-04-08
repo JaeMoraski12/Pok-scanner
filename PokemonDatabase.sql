@@ -1,29 +1,27 @@
 CREATE DATABASE PokemonReference;
-USE PokemonReference;
 
 CREATE TABLE GenerationChart (
-    generation_id INTEGER PRIMARY KEY AUTO_INCREMENT,
+    generation_id SERIAL PRIMARY KEY,
     generation_name VARCHAR(50)
 );
 
 CREATE TABLE TypeChart (
-    type_id INT PRIMARY KEY AUTO_INCREMENT,
+    type_id SERIAL PRIMARY KEY,
     type_name VARCHAR(50)
 );
 
 CREATE TABLE LocationChart (
-    location_id INT PRIMARY KEY AUTO_INCREMENT,
+    location_id SERIAL PRIMARY KEY,
     location_name VARCHAR(50) NOT NULL
 );
-
 CREATE TABLE Pokemon (
-    pokemon_id INT PRIMARY KEY AUTO_INCREMENT,
+    pokemon_id SERIAL PRIMARY KEY,
     national_dex_number INT UNIQUE NOT NULL,  
     pokemon_name VARCHAR(50) NOT NULL,                           
     pokemon_description TEXT,                                                                                  
     pokemon_speed INT,
     catch_rate INT,
-    generation_id INTEGER REFERENCES GenerationChart(generation_id),
+    generation_id INTEGER NOT NULL REFERENCES GenerationChart(generation_id),
     image_URL VARCHAR(500)                          
 );
 
@@ -58,25 +56,26 @@ CREATE TABLE Evolutions (
 );
 
 CREATE TABLE GamesChart (
-    game_id INT PRIMARY KEY AUTO_INCREMENT,
+    game_id SERIAL PRIMARY KEY,
     game_name VARCHAR(50) NOT NULL
 );
 
 CREATE TABLE GameAllocation (
-    pokemon_id INTEGER REFERENCES Pokemon(pokemone_id),
+    pokemon_id INTEGER REFERENCES Pokemon(pokemon_id),
     game_id INTEGER REFERENCES GamesChart(game_id),
     PRIMARY KEY (pokemon_id, game_id)
 );
 
 CREATE TABLE AiImagesChart (
-    ai_image_id INT PRIMARY KEY AUTO_INCREMENT,
+    ai_image_id SERIAL PRIMARY KEY,
     image_name VARCHAR(500) NOT NULL
 );
 
-CREATE TABLE AiIMageAllocation (
+CREATE TABLE AiImageAllocation (
     pokemon_id INTEGER REFERENCES Pokemon(pokemon_id),
-    ai_image_id INTEGER REFERENCES AiImagesChart(ai_image_id)
-    PRIMARY KEY (pokemon_id, ai_image_id)
+    ai_image_id INTEGER REFERENCES AiImagesChart(ai_image_id),
+    generation_id INTEGER REFERENCES GenerationChart(generation_id),
+    PRIMARY KEY (pokemon_id, ai_image_id, generation_id)
 );
 
 
