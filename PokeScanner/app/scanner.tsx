@@ -5,8 +5,10 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  ActivityIndicator,
   Alert,
-  ActivityIndicator
+  Image,
+  Modal,
 } from 'react-native';
 import { CameraView, useCameraPermissions, CameraType } from 'expo-camera';
 import { router } from 'expo-router';
@@ -14,8 +16,10 @@ import { router } from 'expo-router';
 export default function ScannerScreen() {
   const [facing, setFacing] = useState<CameraType>('back');
   const [permission, requestPermission] = useCameraPermissions();
-  const [isScanning, setIsScanning] = useState(false);
+  const [isTakingPhoto, setIsTakingPhoto] = useState(false);
   const cameraRef = useRef<CameraView>(null);
+  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   if (!permission) {
     return (
@@ -52,60 +56,120 @@ export default function ScannerScreen() {
 
   const takePicture = async () => {
     if (cameraRef.current) {
-      setIsScanning(true);
+      setIsTakingPhoto(true);
       try {
         const photo = await cameraRef.current.takePictureAsync({
           quality: 0.7,
           base64: true,
         });
-        Alert.alert('Photo Taken', 'Who\'s That Pokémon!');
-        console.log('Photo Captured', photo?.uri);
+        setCapturedPhoto(photo.uri);
+        setShowPreview(true);
       } catch (error) {
         console.error('Error taking photo:', error);
-        Alert.alert('Error', 'Failed to take photo');
       } finally {
-        setIsScanning(false);
+        setIsTakingPhoto(false);
       }
     }
   };
 
-  // --- Main Screen UI ---
-  return (
-    <View style={styles.container}>
-      <CameraView
-        ref={cameraRef}
-        style={styles.camera}
-        facing={facing}
-        mode="picture"
-      >
-        <View style={styles.overlay}>
-          <Text style={styles.scanText}>Center Pokémon in frame</Text>
+  const handleRetake = () => {
+    setShowPreview(false);
+    setCapturedPhoto(null);
+  }
+
+  //TODO: Send to AI here
+  const handleUsePhoto = () => {
+    setShowPreview(false);
+    Alert.alert(
+      'Photo Accepted',
+      'This is where the AI will scan the photo!',
+      [
+        {
+          text: 'ok',
+          onPress: () => {
+            setCapturedPhoto(null);
+          }
+        }
+      ]
+    );
+  };
+
+  const PreviewModal = () => (
+    <Modal
+      visible={showPreview}
+      animationType="slide"
+      transparent={false}
+      onRequestClose={handleRetake}
+    >
+      <View style={styles.modalContainer}>
+        <Text style={styles.modalTitle}>Your Photo</Text>
+        {capturedPhoto && (
+          <Image source={{ uri: capturedPhoto }} style={styles.previewImage} />
+        )}
+
+        <Text style={styles.questionText}>Do you want to use this photo?</Text>
+        <View style={styles.modalButtons}>
           <TouchableOpacity
-            style={styles.captureButton}
-            onPress={takePicture}
-            disabled={isScanning}
+            style={[styles.modalButton, styles.retakeButton]}
+            onPress={handleRetake}
           >
-            {isScanning ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <View style={styles.captureButtonInner} />
-            )}
+            <Text style={styles.buttonText}>Retake Photo</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.flipButton}
-            onPress={toggleCameraFacing}
+            style={[styles.modalButton, styles.useButton]}
+            onPress={handleUsePhoto}
           >
-            <Text style={styles.flipButtonText}>⟳</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={() => router.back()}
-          >
-            <Text style={styles.closeButtonText}>✕</Text>
+            <Text style={styles.buttonText}>Use This Photo</Text>
           </TouchableOpacity>
         </View>
-      </CameraView>
-    </View>
+      </View>
+    </Modal>
+  );
+
+
+  // --- Main Screen UI ---
+  return (
+    <>
+      <View style={styles.container}>
+        <CameraView
+          ref={cameraRef}
+          style={styles.camera}
+          facing={facing}
+          mode="picture"
+        >
+          <View style={styles.overlay}>
+            <Text style={styles.scanText}>Center Pokémon in frame</Text>
+            <TouchableOpacity
+              style={styles.captureButton}
+              onPress={takePicture}
+              disabled={isTakingPhoto}
+            >
+              {isTakingPhoto ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <View style={styles.captureButtonInner} />
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.flipButton}
+              onPress={toggleCameraFacing}
+            >
+              <Text style={styles.flipButtonText}>⟳</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => router.back()}
+            >
+              <Text style={styles.closeButtonText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        </CameraView>
+      </View>
+
+      <PreviewModal />
+    </>
   );
 }
 
@@ -225,6 +289,57 @@ const styles = StyleSheet.create({
   backButtonText: {
     color: 'white',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 20,
+  },
+  previewImage: {
+    width: 300,
+    height: 300,
+    borderRadius: 20,
+    marginBottom: 30,
+    borderWidth: 3,
+    borderColor: '#e74c3c'
+  },
+  questionText: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: '#2c3e50',
+    marginBottom: 30,
+    textAlign: 'center',
+  },
+  modalButtons: {
+    flexDirection: 'column',
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 30,
+    textAlign: 'center',
+  },
+  modalButton: {
+    paddingVertical: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  retakeButton: {
+    backgroundColor: '#f39c12'
+  },
+  useButton: {
+    backgroundColor: '#2ecc71',
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 18,
     fontWeight: '600',
   },
 });
