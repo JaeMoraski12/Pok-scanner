@@ -1,1 +1,4 @@
 Pixel ranges in background to place sprites: (140,65)-(216,33)
+
+Command to run: 
+python backgroundParcer.py --backgrounds ./Backgrounds --sprites ./Sprites/Generation_3 --output ./output --num-var 10
