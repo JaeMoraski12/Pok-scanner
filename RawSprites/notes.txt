@@ -1,0 +1,1 @@
+Pixel ranges in background to place sprites: (140,65)-(216,33)
