@@ -28,7 +28,7 @@ SUPPORTED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".webp"}
 minCoord = (140,65)
 maxCoord = (216,33)
 
-cropRegion = 
+cropRegion = (110,0,240,113)
 
 
 def parse_args():
@@ -94,7 +94,7 @@ def composite(bg_path: Path, sprite_path: Path, output_folder: Path):
 
     result = bg.copy()
     result.paste(sprite, (x, y), sprite)
-    result.crop()
+    result = result.crop(cropRegion)
 
     out_path = output_folder / bg_path.name
 
