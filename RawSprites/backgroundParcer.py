@@ -1,8 +1,8 @@
 """
 composite_images.py
 
-Pastes a single sprite image onto every background image in a folder
-at a fixed (x, y) pixel coordinate.
+Pastes a sprite images onto every background image in a folder
+at a range of pixel coordinate.
 
 Usage:
     python composite_images.py \
@@ -25,8 +25,9 @@ from PIL import Image
 
 SUPPORTED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".webp"}
 
-minCoord = (140,65)
-maxCoord = (216,33)
+#Change these for different backgrounds
+minCoord = (140,33)
+maxCoord = (216,65)
 
 cropRegion = (110,0,240,113)
 
@@ -79,12 +80,13 @@ def get_image_files(bg_folder: Path) -> list[Path]:
 
 
 
-def composite(bg_path: Path, sprite_path: Path, output_folder: Path):
+def composite(bg_path: Path, sprite_path: Path, output_folder: Path, img_num: int):
     bg = load_image(bg_path)
     sprite = load_image(sprite_path)
 
+
     x = random.randint(minCoord[0],maxCoord[0]) - (sprite.width // 2)
-    y = random.randint(maxCoord[1],minCoord[1]) - (sprite.height // 2)
+    y = random.randint(minCoord[1],maxCoord[1]) - (sprite.height // 2)
 
     # Warn if sprite would be clipped by background bounds
     if x + sprite.width > bg.width or y + sprite.height > bg.height:
@@ -96,7 +98,7 @@ def composite(bg_path: Path, sprite_path: Path, output_folder: Path):
     result.paste(sprite, (x, y), sprite)
     result = result.crop(cropRegion)
 
-    out_path = output_folder / bg_path.name
+    out_path = output_folder / (sprite_path.name.split("_")[0] + str(img_num) + bg_path.name)
 
     # Save as PNG to avoid re-compression artefacts; preserve original ext for JPEGs
     if bg_path.suffix.lower() in {".jpg", ".jpeg"}:
@@ -116,11 +118,12 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     print(f"Output folder: {args.output}\n")
 
-    for bg_path in bg_files:
-        for sprite_path in sprites:
-            out_path = args.output / sprite_path.name
-            out_path.mkdir(parents=True, exist_ok=True)
-            composite(bg_path, sprite_path, out_path)
+    for sprite_path in sprites:
+        for bg_path in bg_files:
+            for i in range(0,args.num_var):
+                out_path = args.output / sprite_path.name.split("_")[0]
+                out_path.mkdir(parents=True, exist_ok=True)
+                composite(bg_path, sprite_path, out_path, i)
 
     print(f"\nDone! {len(bg_files)} image(s) saved to '{args.output}'")
 
