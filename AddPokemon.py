@@ -2,20 +2,38 @@ import psycopg2
 from psycopg2.extras import execute_values
 import requests
 import time
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Tuple
 
-def get_pokemon_using_generation(gen = int):
+types_id = []
+
+def get_name(gen = int):
     url = f" https://pokeapi.co/api/v2/generation/{gen}/"
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
         pokemon_species = data.get("pokemon_species", []) 
         for species in pokemon_species:
+            type = get_type(species["name"])
+    else:
+        print(f"Failed to retrieve data for generation {gen}. Status code: {response.status_code}")
+    
+def get_pokemon_using_generation(gen = int) -> Tuple[str, int, int, List[str]]:
+    url = f" https://pokeapi.co/api/v2/generation/{gen}/"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        pokemon_species = data.get("pokemon_species", []) 
+        for species in pokemon_species:
+            name = species["name"]
             print(species["name"])
             time.sleep(0.5)  # To avoid hitting API rate limits
-            get_national_id(species["name"])
+            national_id = get_national_id(species["name"])
             time.sleep(0.5)
-            get_type(species["name"])
+            speed =get_speed(species["name"])
+            time.sleep(0.5)
+            types = get_type(species["name"])
+            time.sleep(0.5)
+            evolution = get_evolution_chain(species["name"])
     else:
         print(f"Failed to retrieve data for generation {gen}. Status code: {response.status_code}")
 
@@ -31,34 +49,53 @@ def get_national_id(pokemon_name: str) -> int:
         print(f"Failed to retrieve data for {pokemon_name}. Status code: {response.status_code}")
         return -1
 
-def get_type(pokemon_name: str) -> List[str]:
+def get_speed(pokemon_name: str) -> int:
+    url = f"https://pokeapi.co/api/v2/pokemon/{pokemon_name.lower()}/"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        for stat in data.get('stats', []):
+            if stat['stat']['name'] == 'speed':
+                print(f"Speed for {pokemon_name}: {stat['base_stat']}")
+                return stat['base_stat']
+        print(f"Speed for {pokemon_name}: Not found")
+        return -1
+    else:
+        print(f"Failed to retrieve data for {pokemon_name}. Status code: {response.status_code}")
+        return -1
+
+def get_type(pokemon_name: str) -> Tuple[List[str], List[str], List[str], List[str], List[str], List[str]]:
     url = f"https://pokeapi.co/api/v2/pokemon/{pokemon_name.lower()}/"
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
         types = [t['type']['name'] for t in data.get('types', [])]
         print(f"Types for {pokemon_name}: {types}")
+
+        double_from = []
+        double_to = []
+        half_from = []
+        half_to = []
+        no_from = []
+        no_to = []
+        
         for t in types:
             time.sleep(0.5)
-            double_from = get_type_double_damage_from(t)
+            double_from += get_type_double_damage_from(t)
             time.sleep(0.5)
-            double_to = get_type_double_damage_to(t)
+            double_to += get_type_double_damage_to(t)
             time.sleep(0.5)
-            half_from = get_type_half_damage_from(t)
+            half_from += get_type_half_damage_from(t)
             time.sleep(0.5)
-            half_to = get_type_half_damage_to(t)
+            half_to += get_type_half_damage_to(t)
             time.sleep(0.5)
-            no_from = get_type_no_damage_from(t)
+            no_from += get_type_no_damage_from(t)
             time.sleep(0.5)
-            no_to = get_type_no_damage_to(t)
-            time.sleep(0.5)
-            evolution = get_evolution_chain(pokemon_name)
-            time.sleep(0.5) 
-            
-        return types
+            no_to += get_type_no_damage_to(t)
+        return (double_from, double_to, half_from, half_to, no_from, no_to)
     else:
         print(f"Failed to retrieve data for {pokemon_name}. Status code: {response.status_code}")
-        return []
+        return ([], [], [], [], [], [])
 
 def get_type_double_damage_from(type_name: str) -> List[str]:
     url = f"https://pokeapi.co/api/v2/type/{type_name.lower()}/"
@@ -72,7 +109,7 @@ def get_type_double_damage_from(type_name: str) -> List[str]:
         print(f"Failed to retrieve data for type {type_name}. Status code: {response.status_code}")
         return []
     
-def get_type_double_damage_to(type_name: str) -> List[str]:
+def get_type_double_damage_to(type_name: str) -> Tuple[List[str], List[str], List[str], List[str], List[str], List[str]]:
     url = f"https://pokeapi.co/api/v2/type/{type_name.lower()}/"
     response = requests.get(url)
     if response.status_code == 200:
@@ -172,20 +209,43 @@ def insert_pokemon_data(conn, pokemon_data):
         """
         execute_values(cur, insert_query, pokemon_data)
     conn.commit()
-    
-    
+
+def insert_type(conn):
+    url = f"https://pokeapi.co/api/v2/type/"
+    response = requests.get(url)
+    types = []
+    if response.status_code == 200:
+        data = response.json()
+        with conn.cursor() as cur:
+            for type_data in data.get("results", []):
+                types += [type_data["name"]]
+               
+                # print(f"Inserting: {type_name}")
+                # cur.execute("""
+                #     INSERT INTO TypeChart (type_name)
+                #     VALUES (%s)
+                #     ON CONFLICT (type_name) DO NOTHING
+                # """, (type_name,))
+    print(f"{types}")
+
+def insert_type_chart_data(conn, pokemon_id, type_data):
+    pass
+
 if __name__ == "__main__":
     try:
         conn = psycopg2.connect(
             host="localhost",
             port = "5433",
-            database="postgres",
+            database="PokemonScanner",
             user="postgres",
             password="admin",
         )
         print("Connected to the database successfully!")
-        conn.close()
     except Exception as e:
         print("Error connecting to the database:", e)
-    get_pokemon_using_generation(2)
-
+        exit(1)
+    insert_type(conn)
+    # get_pokemon_using_generation(1)
+    # get_pokemon_using_generation(2)
+    # get_pokemon_using_generation(3)
+    conn.close()

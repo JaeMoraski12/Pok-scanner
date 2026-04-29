@@ -7,7 +7,7 @@ CREATE TABLE GenerationChart (
 
 CREATE TABLE TypeChart (
     type_id SERIAL PRIMARY KEY,
-    type_name VARCHAR(50)
+    type_name VARCHAR(50) UNIQUE NOT NULL
 );
 
 CREATE TABLE LocationChart (
@@ -17,9 +17,9 @@ CREATE TABLE LocationChart (
 CREATE TABLE Pokemon (
     pokemon_id SERIAL PRIMARY KEY,
     national_dex_number INT UNIQUE NOT NULL,  
-    pokemon_name VARCHAR(50) NOT NULL,                                                                                                            
-    pokemon_speed INT,
-    generation_id INTEGER NOT NULL REFERENCES GenerationChart(generation_id),
+    pokemon_name VARCHAR(50) UNIQUE NOT NULL,                                                                                                            
+    pokemon_speed INT UNIQUE NOT NULL,
+    generation_id INTEGER UNIQUE NOT NULL REFERENCES GenerationChart(generation_id),
     image_URL VARCHAR(500)                          
 );
 
