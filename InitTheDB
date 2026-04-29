@@ -1,0 +1,2 @@
+
+psql -h localhost -p 5433 -U postgres -f "C:\Users\jaeli\OneDrive\Documents\William and Mary\Junior\Spring 26\Fundamental of AI\Pokemon AI generator\Pok-scanner\PokemonDatabase.sql"

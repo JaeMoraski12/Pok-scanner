@@ -17,27 +17,43 @@ CREATE TABLE LocationChart (
 CREATE TABLE Pokemon (
     pokemon_id SERIAL PRIMARY KEY,
     national_dex_number INT UNIQUE NOT NULL,  
-    pokemon_name VARCHAR(50) NOT NULL,                           
-    pokemon_description TEXT,                                                                                  
+    pokemon_name VARCHAR(50) NOT NULL,                                                                                                            
     pokemon_speed INT,
-    catch_rate INT,
     generation_id INTEGER NOT NULL REFERENCES GenerationChart(generation_id),
     image_URL VARCHAR(500)                          
 );
 
-CREATE TABLE WeaknessChart (
+CREATE TABLE DoubleDamageFromChart (
     pokemon_id INTEGER REFERENCES Pokemon(pokemon_id),
     type_id INTEGER REFERENCES TypeChart(type_id),
     PRIMARY KEY (pokemon_id, type_id)
 );
 
-CREATE TABLE ResistanceChart (
+CREATE TABLE DoubleDamageToChart (
     pokemon_id INTEGER REFERENCES Pokemon(pokemon_id),
     type_id INTEGER REFERENCES TypeChart(type_id),
     PRIMARY KEY (pokemon_id, type_id)
 );
 
-CREATE TABLE ImmunityChart (
+CREATE TABLE HalfDamageFromChart (
+    pokemon_id INTEGER REFERENCES Pokemon(pokemon_id),
+    type_id INTEGER REFERENCES TypeChart(type_id),
+    PRIMARY KEY (pokemon_id, type_id)
+);
+
+CREATE TABLE HalfDamageToChart (
+    pokemon_id INTEGER REFERENCES Pokemon(pokemon_id),
+    type_id INTEGER REFERENCES TypeChart(type_id),
+    PRIMARY KEY (pokemon_id, type_id)
+);
+
+CREATE TABLE NoDamageToChart (
+    pokemon_id INTEGER REFERENCES Pokemon(pokemon_id),
+    type_id INTEGER REFERENCES TypeChart(type_id),
+    PRIMARY KEY (pokemon_id, type_id)
+);
+
+CREATE TABLE NoDamageFromChart (
     pokemon_id INTEGER REFERENCES Pokemon(pokemon_id),
     type_id INTEGER REFERENCES TypeChart(type_id),
     PRIMARY KEY (pokemon_id, type_id)
@@ -50,9 +66,10 @@ CREATE TABLE PokemonLocationChart (
 );
 
 CREATE TABLE Evolutions (
-    from_pokemon_id INTEGER REFERENCES Pokemon(pokemon_id),
-    to_pokemon_id INTEGER REFERENCES Pokemon(pokemon_id),
-    PRIMARY KEY (from_pokemon_id, to_pokemon_id)
+    first_evolution_id INTEGER REFERENCES Pokemon(pokemon_id),
+    second_evolution_id INTEGER REFERENCES Pokemon(pokemon_id),        
+    third_evolution_id INTEGER REFERENCES Pokemon(pokemon_id),
+    PRIMARY KEY (first_evolution_id, second_evolution_id, third_evolution_id)
 );
 
 CREATE TABLE GamesChart (
