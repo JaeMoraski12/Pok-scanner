@@ -1,0 +1,113 @@
+import psycopg2
+
+def manually_add_deoxys(conn):
+    """Manually add Deoxys if the script missed it"""
+    
+    with conn.cursor() as cur:
+        
+        cur.execute("SELECT pokemon_id FROM Pokemon WHERE national_dex_number = 386")
+        exists = cur.fetchone()
+        
+        if exists:
+            print("Deoxys already exists in database!")
+            return
+        
+        cur.execute("""
+            INSERT INTO Pokemon (national_dex_number, pokemon_name, pokemon_speed, generation_id)
+            VALUES (386, 'deoxys', 150, 3)
+            ON CONFLICT (national_dex_number) DO NOTHING
+            RETURNING pokemon_id
+        """)
+        
+        result = cur.fetchone()
+        if result:
+            pokemon_id = result[0]
+            print(f"✓ Added Deoxys with ID: {pokemon_id}")
+            
+            
+            cur.execute("SELECT type_id FROM TypeChart WHERE type_name = 'psychic'")
+            type_result = cur.fetchone()
+            if type_result:
+                type_id = type_result[0]
+                cur.execute("""
+                    INSERT INTO PokemonTypes (pokemon_id, type_id)
+                    VALUES (%s, %s)
+                    ON CONFLICT DO NOTHING
+                """, (pokemon_id, type_id))
+                print("✓ Added Psychic type")
+        
+        conn.commit()
+
+def fix_deoxys_type(conn):
+    """Fix Deoxys type from Unknown to Psychic"""
+    
+    with conn.cursor() as cur:
+        cur.execute("SELECT pokemon_id FROM Pokemon WHERE national_dex_number = 386")
+        result = cur.fetchone()
+        
+        if not result:
+            print("Deoxys not found in database!")
+            return
+        
+        deoxys_id = result[0]
+        
+        
+        cur.execute("SELECT type_id FROM TypeChart WHERE type_name = 'psychic'")
+        type_result = cur.fetchone()
+        
+        if not type_result:
+            print("Psychic type not found in TypeChart!")
+            return
+        
+        psychic_id = type_result[0]
+        
+        
+        cur.execute("DELETE FROM PokemonTypes WHERE pokemon_id = %s", (deoxys_id,))
+        print(f"Removed old type associations")
+        
+        
+        cur.execute("""
+            INSERT INTO PokemonTypes (pokemon_id, type_id)
+            VALUES (%s, %s)
+            ON CONFLICT (pokemon_id, type_id) DO NOTHING
+        """, (deoxys_id, psychic_id))
+        print(f"Added Psychic type to Deoxys")
+        
+        conn.commit()
+        
+        
+        cur.execute("""
+            SELECT p.pokemon_name, t.type_name
+            FROM Pokemon p
+            JOIN PokemonTypes pt ON p.pokemon_id = pt.pokemon_id
+            JOIN TypeChart t ON pt.type_id = t.type_id
+            WHERE p.national_dex_number = 386
+        """)
+        
+        result = cur.fetchone()
+        if result:
+            name, type_name = result
+            print(f"\n✅ Verification: {name} is now type: {type_name}")
+        else:
+            print("\n⚠ Verification failed - no type found")
+
+if __name__ == "__main__":
+    try:
+        conn = psycopg2.connect(
+            host="localhost",
+            port="5433",
+            database="PokemonScanner",
+            user="postgres",
+            password="admin",
+        )
+        print("Connected to database!")
+        
+        fix_deoxys_type(conn)
+        
+        conn.close()
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        if conn:
+            conn.rollback()
+            conn.close()

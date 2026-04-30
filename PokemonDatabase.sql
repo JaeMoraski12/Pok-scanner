@@ -1,4 +1,4 @@
-CREATE DATABASE PokemonReference;
+CREATE DATABASE PokemonScanner;
 
 CREATE TABLE GenerationChart (
     generation_id SERIAL PRIMARY KEY,
@@ -10,16 +10,17 @@ CREATE TABLE TypeChart (
     type_name VARCHAR(50) UNIQUE NOT NULL
 );
 
-CREATE TABLE LocationChart (
-    location_id SERIAL PRIMARY KEY,
-    location_name VARCHAR(50) NOT NULL
-);
+-- CREATE TABLE LocationChart (
+--     location_id SERIAL PRIMARY KEY,
+--     location_name VARCHAR(50) NOT NULL
+-- );
+
 CREATE TABLE Pokemon (
     pokemon_id SERIAL PRIMARY KEY,
     national_dex_number INT UNIQUE NOT NULL,  
     pokemon_name VARCHAR(50) UNIQUE NOT NULL,                                                                                                            
-    pokemon_speed INT UNIQUE NOT NULL,
-    generation_id INTEGER UNIQUE NOT NULL REFERENCES GenerationChart(generation_id),
+    pokemon_speed INT NOT NULL,
+    generation_id INTEGER NOT NULL REFERENCES GenerationChart(generation_id),
     image_URL VARCHAR(500)                          
 );
 
@@ -59,29 +60,40 @@ CREATE TABLE NoDamageFromChart (
     PRIMARY KEY (pokemon_id, type_id)
 );
 
-CREATE TABLE PokemonLocationChart (
+CREATE TABLE PokemonTypes (
     pokemon_id INTEGER REFERENCES Pokemon(pokemon_id),
-    location_id INTEGER REFERENCES LocationChart(location_id),
-    PRIMARY KEY (pokemon_id, location_id)
+    type_id INTEGER REFERENCES TypeChart(type_id),
+    PRIMARY KEY (pokemon_id, type_id)
 );
 
-CREATE TABLE Evolutions (
-    first_evolution_id INTEGER REFERENCES Pokemon(pokemon_id),
-    second_evolution_id INTEGER REFERENCES Pokemon(pokemon_id),        
-    third_evolution_id INTEGER REFERENCES Pokemon(pokemon_id),
-    PRIMARY KEY (first_evolution_id, second_evolution_id, third_evolution_id)
+-- CREATE TABLE PokemonLocationChart (
+--     pokemon_id INTEGER REFERENCES Pokemon(pokemon_id),
+--     location_id INTEGER REFERENCES LocationChart(location_id),
+--     PRIMARY KEY (pokemon_id, location_id)
+-- );
+
+CREATE TABLE PokemonEvolutions (
+    evolution_id SERIAL PRIMARY KEY,
+    pokemon_id INTEGER NOT NULL REFERENCES Pokemon(pokemon_id),
+    evolves_from_id INTEGER REFERENCES Pokemon(pokemon_id),
+    evolves_to_id INTEGER REFERENCES Pokemon(pokemon_id),
+    evolution_stage INTEGER,
+    UNIQUE(pokemon_id, evolves_to_id)
 );
 
-CREATE TABLE GamesChart (
-    game_id SERIAL PRIMARY KEY,
-    game_name VARCHAR(50) NOT NULL
-);
+CREATE INDEX idx_evolutions_pokemon ON PokemonEvolutions(pokemon_id);
+CREATE INDEX idx_evolutions_to ON PokemonEvolutions(evolves_to_id);
 
-CREATE TABLE GameAllocation (
-    pokemon_id INTEGER REFERENCES Pokemon(pokemon_id),
-    game_id INTEGER REFERENCES GamesChart(game_id),
-    PRIMARY KEY (pokemon_id, game_id)
-);
+-- CREATE TABLE GamesChart (
+--     game_id SERIAL PRIMARY KEY,
+--     game_name VARCHAR(50) NOT NULL
+-- );
+
+-- CREATE TABLE GameAllocation (
+--     pokemon_id INTEGER REFERENCES Pokemon(pokemon_id),
+--     game_id INTEGER REFERENCES GamesChart(game_id),
+--     PRIMARY KEY (pokemon_id, game_id)
+-- );
 
 CREATE TABLE AiImagesChart (
     ai_image_id SERIAL PRIMARY KEY,
