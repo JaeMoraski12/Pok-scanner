@@ -121,20 +121,100 @@ def insert_damage_relations(conn, pokemon_id: int, damage_data: Tuple):
                     """, (pokemon_id, type_id))
     conn.commit()
 
-def insert_evolution_chain(conn, evolutions: List[str]):
-    """Insert evolution relationships linking each Pokemon to its next form"""
+def get_pokemon_generation(pokemon_name: str) -> int:
+    """Get the generation number for a Pokémon from the PokeAPI"""
+    try:
+        url = f"https://pokeapi.co/api/v2/pokemon-species/{pokemon_name.lower()}/"
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            # Get generation from the API response
+            generation_url = data.get('generation', {}).get('url', '')
+            if generation_url:
+                # Extract generation number from URL (e.g., "https://pokeapi.co/api/v2/generation/1/")
+                gen_num = int(generation_url.rstrip('/').split('/')[-1])
+                return gen_num
+        return None
+    except Exception as e:
+        print(f"Error getting generation for {pokemon_name}: {e}")
+        return None
+
+def filter_evolution_chain_by_generation(conn, evolution_chain: List[str], target_generations: Set[int]) -> List[str]:
+    """
+    Filter evolution chain to only include Pokémon from specified generations.
+    
+    Args:
+        conn: Database connection
+        evolution_chain: List of Pokémon names in evolution order
+        target_generations: Set of generation numbers to keep (e.g., {1, 2, 3})
+    
+    Returns:
+        Filtered list of Pokémon names that are in target generations
+    """
+    if not evolution_chain:
+        return []
+    
+    filtered_chain = []
+    skipped_pokemon = []
+    
+    for pokemon_name in evolution_chain:
+        # First check if Pokémon is already in database
+        if pokemon_exists(conn, name=pokemon_name):
+            # If it exists, we need to get its generation from the database
+            with conn.cursor() as cur:
+                cur.execute("SELECT generation_id FROM Pokemon WHERE pokemon_name = %s", (pokemon_name,))
+                result = cur.fetchone()
+                if result and result[0] in target_generations:
+                    filtered_chain.append(pokemon_name)
+                else:
+                    skipped_pokemon.append(f"{pokemon_name} (Gen {result[0] if result else 'Unknown'})")
+        else:
+            # Pokémon not in database yet, check its generation from API
+            generation = get_pokemon_generation(pokemon_name)
+            if generation and generation in target_generations:
+                filtered_chain.append(pokemon_name)
+            else:
+                if generation:
+                    skipped_pokemon.append(f"{pokemon_name} (Gen {generation})")
+                else:
+                    skipped_pokemon.append(f"{pokemon_name} (Generation Unknown)")
+    
+    if skipped_pokemon:
+        print(f"  ⚠ Skipped Pokémon not in Generations {sorted(target_generations)}: {', '.join(skipped_pokemon)}")
+    
+    return filtered_chain
+
+def insert_evolution_chain(conn, evolutions: List[str], target_generations: Set[int] = {1, 2, 3}):
+    """
+    Insert evolution relationships, filtering to only include Pokémon from target generations.
+    
+    Args:
+        conn: Database connection
+        evolutions: List of Pokémon names in evolution order
+        target_generations: Set of generation numbers to include (default: {1, 2, 3})
+    """
     if len(evolutions) < 2:
+        return
+    
+    # Filter evolution chain to only include target generations
+    filtered_evolutions = filter_evolution_chain_by_generation(conn, evolutions, target_generations)
+    
+    if len(filtered_evolutions) < 2:
+        if filtered_evolutions:
+            print(f"  ℹ Only 1 Pokémon from Generations {sorted(target_generations)} in chain: {filtered_evolutions[0]}")
+        else:
+            print(f"  ℹ No Pokémon from Generations {sorted(target_generations)} in evolution chain")
         return
     
     pokemon_ids = []
     with conn.cursor() as cur:
-        for name in evolutions:
+        for name in filtered_evolutions:
             cur.execute("SELECT pokemon_id, pokemon_name FROM Pokemon WHERE pokemon_name = %s", (name,))
             result = cur.fetchone()
             if result:
                 pokemon_ids.append((result[0], result[1]))
             else:
-                print(f"Warning: {name} not found in database yet, will link later")
+                print(f"  ⚠ Warning: {name} not found in database yet, will skip this evolution link")
                 return
     
     links_added = 0
@@ -143,28 +223,27 @@ def insert_evolution_chain(conn, evolutions: List[str]):
             current_id, current_name = pokemon_ids[i]
             next_id, next_name = pokemon_ids[i + 1]
             
+            # Delete any existing link from current to next
             cur.execute("""
-                SELECT 1 FROM PokemonEvolutions 
+                DELETE FROM PokemonEvolutions 
                 WHERE pokemon_id = %s AND evolves_to_id = %s
             """, (current_id, next_id))
             
-            if not cur.fetchone():
-                try:
-                    cur.execute("""
-                        INSERT INTO PokemonEvolutions (pokemon_id, evolves_to_id, evolution_stage)
-                        VALUES (%s, %s, %s)
-                        ON CONFLICT (pokemon_id, evolves_to_id) DO NOTHING
-                    """, (current_id, next_id, i + 1))
-                    links_added += 1
-                    print(f"Linked: {current_name} -> {next_name}")
-                except Exception as e:
-                    print(f"Error linking {current_name} -> {next_name}: {e}")
-            else:
-                print(f"Link already exists: {current_name} -> {next_name}")
+            try:
+                cur.execute("""
+                    INSERT INTO PokemonEvolutions (pokemon_id, evolves_to_id, evolution_stage)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (pokemon_id, evolves_to_id) DO NOTHING
+                """, (current_id, next_id, i + 1))
+                links_added += 1
+                print(f"  ✓ Linked: {current_name} → {next_name}")
+            except Exception as e:
+                print(f"  ✗ Error linking {current_name} → {next_name}: {e}")
     
     conn.commit()
     if links_added > 0:
-        print(f"Added {links_added} evolution link(s) for chain: {' → '.join(evolutions)}")
+        evolution_path = ' → '.join(filtered_evolutions)
+        print(f"  ✓ Added {links_added} evolution link(s) for chain: {evolution_path}")
 
 def get_national_id(pokemon_name: str) -> int:
     url = f"https://pokeapi.co/api/v2/pokemon/{pokemon_name.lower()}/"
@@ -308,6 +387,7 @@ def get_type_no_damage_to(type_name: str) -> List[str]:
         return []
     
 def get_evolution_chain(pokemon_name: str) -> List[str]:
+    """Get the complete evolution chain for a Pokémon"""
     url = f"https://pokeapi.co/api/v2/pokemon-species/{pokemon_name.lower()}/"
     response = requests.get(url)
     if response.status_code == 200:
@@ -326,14 +406,14 @@ def get_evolution_chain(pokemon_name: str) -> List[str]:
                     for evo in node.get('evolves_to', []):
                         traverse_chain(evo)
                 traverse_chain(chain)
-                print(f"Evolution chain for {pokemon_name}: {evolutions}")
+                print(f"Complete evolution chain for {pokemon_name}: {evolutions}")
                 return evolutions
             else:
                 print(f"Failed to retrieve evolution chain for {pokemon_name}. Status code: {response.status_code}")
                 return []
     return []
 
-def process_generation(conn, gen_num: int):
+def process_generation(conn, gen_num: int, target_generations: Set[int] = {1, 2, 3}):
     """Process all Pokemon from a specific generation"""
     url = f"https://pokeapi.co/api/v2/generation/{gen_num}/"
     response = requests.get(url)
@@ -352,11 +432,13 @@ def process_generation(conn, gen_num: int):
             
             # Check if Pokemon already exists in database
             if pokemon_exists(conn, name=name):
-                print(f"\nSkipping {name} - already in database")
+                print(f"\n📌 Skipping {name} - already in database")
                 skipped_count += 1
                 continue
             
-            print(f"\nProcessing {name}...")
+            print(f"\n{'='*50}")
+            print(f"Processing {name}...")
+            print(f"{'='*50}")
             
             # Get Pokemon data
             national_id = get_national_id(name)
@@ -374,7 +456,7 @@ def process_generation(conn, gen_num: int):
             types = get_type(name)
             time.sleep(0.5)
             
-            evolution = get_evolution_chain(name)
+            evolution_chain = get_evolution_chain(name)
             time.sleep(0.5)
             
             # Insert into database
@@ -391,15 +473,17 @@ def process_generation(conn, gen_num: int):
             # Insert damage relations
             insert_damage_relations(conn, pokemon_id, types)
             
-            # Insert evolution chain
-            insert_evolution_chain(conn, evolution)
+            # Insert evolution chain with generation filtering
+            print(f"\n  🔄 Processing evolution chain for {name}...")
+            insert_evolution_chain(conn, evolution_chain, target_generations)
             
-            print(f"Successfully inserted {name}!")
+            print(f"\n✅ Successfully inserted {name}!")
             new_count += 1
         
         # Print generation summary
         print(f"\n{'='*50}")
-        print(f"Generation {gen_num} Summary:")
+        print(f"📊 Generation {gen_num} Summary:")
+        print(f"{'='*50}")
         print(f"  Total Pokemon in generation: {total}")
         print(f"  Newly added: {new_count}")
         print(f"  Already existed (skipped): {skipped_count}")
@@ -409,6 +493,7 @@ def process_generation(conn, gen_num: int):
         print(f"Failed to retrieve data for generation {gen_num}. Status code: {response.status_code}")
 
 if __name__ == "__main__":
+    conn = None
     try:
         conn = psycopg2.connect(
             host="localhost",
@@ -417,24 +502,47 @@ if __name__ == "__main__":
             user="postgres",
             password="admin",
         )
-        print("Connected to the database successfully!")
+        print("✅ Connected to the database successfully!")
         
         # Initialize lookup tables
         insert_generation(conn)
         insert_type(conn)
         
+        # Define which generations to include in evolution chains
+        # Only include Pokémon from Generations 1, 2, and 3 in evolution relationships
+        target_evolution_generations = {1, 2, 3}
+        
+        print(f"\n🎯 Evolution chains will only include Pokémon from Generations: {sorted(target_evolution_generations)}")
+        print("   (Pokémon from later generations will be ignored in evolution links)\n")
+        
         # Process generations 1-3
         for gen in range(1, 4):
-            print(f"\n{'='*50}")
-            print(f"Processing Generation {gen}")
-            print(f"{'='*50}")
-            process_generation(conn, gen)
+            print(f"\n{'#'*50}")
+            print(f"# PROCESSING GENERATION {gen}")
+            print(f"{'#'*50}")
+            process_generation(conn, gen, target_evolution_generations)
         
-        conn.close()
-        print("\nAll data inserted successfully!")
+        conn.commit()
+        print("\n🎉 All data inserted successfully!")
+        
+        # Print final summary
+        print("\n" + "="*50)
+        print("📊 FINAL SUMMARY")
+        print("="*50)
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM Pokemon")
+            total_pokemon = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM PokemonEvolutions")
+            total_evolutions = cur.fetchone()[0]
+            print(f"  Total Pokémon in database: {total_pokemon}")
+            print(f"  Total evolution links: {total_evolutions}")
+        print("="*50)
         
     except Exception as e:
-        print("Error:", e)
+        print(f"❌ Error: {e}")
         if conn:
             conn.rollback()
+    finally:
+        if conn:
             conn.close()
+            print("\n🔌 Database connection closed.")

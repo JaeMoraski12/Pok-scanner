@@ -41,7 +41,7 @@ export default function PokedexScreen() {
     const [loadingDamage, setLoadingDamage] = useState(false);
 
     const getApiUrl = () => {
-        // For web browser testing on computer
+    // For web browser testing on computer
         if (Platform.OS === 'web') {
             return 'http://localhost:5000';
         }
