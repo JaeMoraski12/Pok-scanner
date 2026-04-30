@@ -1,0 +1,245 @@
+import psycopg2
+from psycopg2.extras import RealDictCursor
+
+def manually_add_deoxys(conn):
+    """Manually add Deoxys if the script missed it"""
+    
+    with conn.cursor() as cur:
+        
+        cur.execute("SELECT pokemon_id FROM Pokemon WHERE national_dex_number = 386")
+        exists = cur.fetchone()
+        
+        if exists:
+            print("Deoxys already exists in database!")
+            return
+        
+        cur.execute("""
+            INSERT INTO Pokemon (national_dex_number, pokemon_name, pokemon_speed, generation_id)
+            VALUES (386, 'deoxys', 150, 3)
+            ON CONFLICT (national_dex_number) DO NOTHING
+            RETURNING pokemon_id
+        """)
+        
+        result = cur.fetchone()
+        if result:
+            pokemon_id = result[0]
+            print(f"✓ Added Deoxys with ID: {pokemon_id}")
+            
+            
+            cur.execute("SELECT type_id FROM TypeChart WHERE type_name = 'psychic'")
+            type_result = cur.fetchone()
+            if type_result:
+                type_id = type_result[0]
+                cur.execute("""
+                    INSERT INTO PokemonTypes (pokemon_id, type_id)
+                    VALUES (%s, %s)
+                    ON CONFLICT DO NOTHING
+                """, (pokemon_id, type_id))
+                print("✓ Added Psychic type")
+        
+        conn.commit()
+
+def fix_deoxys_type(conn):
+    """Fix Deoxys type from Unknown to Psychic"""
+    
+    with conn.cursor() as cur:
+        cur.execute("SELECT pokemon_id FROM Pokemon WHERE national_dex_number = 386")
+        result = cur.fetchone()
+        
+        if not result:
+            print("Deoxys not found in database!")
+            return
+        
+        deoxys_id = result[0]
+        
+        
+        cur.execute("SELECT type_id FROM TypeChart WHERE type_name = 'psychic'")
+        type_result = cur.fetchone()
+        
+        if not type_result:
+            print("Psychic type not found in TypeChart!")
+            return
+        
+        psychic_id = type_result[0]
+        
+        
+        cur.execute("DELETE FROM PokemonTypes WHERE pokemon_id = %s", (deoxys_id,))
+        print(f"Removed old type associations")
+        
+        
+        cur.execute("""
+            INSERT INTO PokemonTypes (pokemon_id, type_id)
+            VALUES (%s, %s)
+            ON CONFLICT (pokemon_id, type_id) DO NOTHING
+        """, (deoxys_id, psychic_id))
+        print(f"Added Psychic type to Deoxys")
+        
+        conn.commit()
+        
+        
+        cur.execute("""
+            SELECT p.pokemon_name, t.type_name
+            FROM Pokemon p
+            JOIN PokemonTypes pt ON p.pokemon_id = pt.pokemon_id
+            JOIN TypeChart t ON pt.type_id = t.type_id
+            WHERE p.national_dex_number = 386
+        """)
+        
+        result = cur.fetchone()
+        if result:
+            name, type_name = result
+            print(f"\n✅ Verification: {name} is now type: {type_name}")
+        else:
+            print("\n⚠ Verification failed - no type found")
+
+def add_deoxys_damage_relations():
+    """Add all damage relations for Deoxys (Psychic type)"""
+    
+    try:
+        conn = psycopg2.connect(
+            host="localhost",
+            port="5433",
+            database="PokemonScanner",
+            user="postgres",
+            password="admin",
+            cursor_factory=RealDictCursor
+        )
+        
+        with conn.cursor() as cur:
+            # First, get Deoxys ID
+            cur.execute("""
+                SELECT pokemon_id, pokemon_name, national_dex_number 
+                FROM Pokemon 
+                WHERE pokemon_name ILIKE '%deoxys%' OR national_dex_number = 386
+            """)
+            
+            deoxys = cur.fetchone()
+            if not deoxys:
+                print("❌ Deoxys not found in database!")
+                return
+            
+            deoxys_id = deoxys['pokemon_id']
+            print(f"✅ Found Deoxys: {deoxys['pokemon_name']} (ID: {deoxys_id})")
+            
+            # Get type IDs needed
+            cur.execute("SELECT type_id, type_name FROM TypeChart WHERE type_name IN ('bug', 'dark', 'ghost', 'fighting', 'psychic')")
+            types = {row['type_name']: row['type_id'] for row in cur.fetchall()}
+            
+            print(f"\n📊 Type IDs found:")
+            for type_name, type_id in types.items():
+                print(f"   {type_name}: {type_id}")
+            
+            # Clear existing damage relations for Deoxys
+            print("\n🗑️  Clearing existing damage relations...")
+            tables = [
+                'DoubleDamageFromChart', 'DoubleDamageToChart',
+                'HalfDamageFromChart', 'HalfDamageToChart',
+                'NoDamageFromChart', 'NoDamageToChart'
+            ]
+            for table in tables:
+                cur.execute(f"DELETE FROM {table} WHERE pokemon_id = %s", (deoxys_id,))
+                print(f"   Cleared {table}")
+            
+            # Add new damage relations for Psychic type Deoxys
+            
+            # 1. Double damage FROM (weaknesses) - Bug, Dark, Ghost
+            print("\n🔴 Adding weaknesses (2x damage from)...")
+            for type_name in ['bug', 'dark', 'ghost']:
+                if type_name in types:
+                    cur.execute("""
+                        INSERT INTO DoubleDamageFromChart (pokemon_id, type_id)
+                        VALUES (%s, %s)
+                        ON CONFLICT (pokemon_id, type_id) DO NOTHING
+                    """, (deoxys_id, types[type_name]))
+                    print(f"   ✓ Deoxys takes 2x damage from {type_name}")
+            
+            # 2. Double damage TO (strengths) - Fighting, Poison
+            print("\n🟢 Adding strengths (deals 2x damage to)...")
+            # Psychic deals double damage to Fighting and Poison
+            # Get Fighting and Poison type IDs
+            cur.execute("SELECT type_id, type_name FROM TypeChart WHERE type_name IN ('fighting', 'poison')")
+            strengths = {row['type_name']: row['type_id'] for row in cur.fetchall()}
+            
+            for type_name in ['fighting', 'poison']:
+                if type_name in strengths:
+                    cur.execute("""
+                        INSERT INTO DoubleDamageToChart (pokemon_id, type_id)
+                        VALUES (%s, %s)
+                        ON CONFLICT (pokemon_id, type_id) DO NOTHING
+                    """, (deoxys_id, strengths[type_name]))
+                    print(f"   ✓ Deoxys deals 2x damage to {type_name}")
+            
+            # 3. Half damage FROM (resistances) - Fighting, Psychic
+            print("\n🟡 Adding resistances (0.5x damage from)...")
+            for type_name in ['fighting', 'psychic']:
+                if type_name in types:
+                    cur.execute("""
+                        INSERT INTO HalfDamageFromChart (pokemon_id, type_id)
+                        VALUES (%s, %s)
+                        ON CONFLICT (pokemon_id, type_id) DO NOTHING
+                    """, (deoxys_id, types[type_name]))
+                    print(f"   ✓ Deoxys takes 0.5x damage from {type_name}")
+            
+            # 4. Half damage TO (not very effective against) - Psychic, Steel, Dark? Wait, let me check
+            # Psychic deals half damage to Psychic and Steel
+            print("\n🟡 Adding not very effective (deals 0.5x damage to)...")
+            cur.execute("SELECT type_id, type_name FROM TypeChart WHERE type_name IN ('psychic', 'steel')")
+            not_effective = {row['type_name']: row['type_id'] for row in cur.fetchall()}
+            
+            for type_name in ['psychic', 'steel']:
+                if type_name in not_effective:
+                    cur.execute("""
+                        INSERT INTO HalfDamageToChart (pokemon_id, type_id)
+                        VALUES (%s, %s)
+                        ON CONFLICT (pokemon_id, type_id) DO NOTHING
+                    """, (deoxys_id, not_effective[type_name]))
+                    print(f"   ✓ Deoxys deals 0.5x damage to {type_name}")
+            
+            # 5. No damage FROM (immunities) - None for Psychic
+            print("\n⚪ Adding immunities (0x damage from)...")
+            print("   ✓ Psychic type has no immunities")
+            
+            # 6. No damage TO (no effect on) - None for Psychic
+            print("\n⚪ Adding no effect (deals 0x damage to)...")
+            print("   ✓ Psychic type has no immunities")
+            
+            conn.commit()
+            
+            print("\n" + "="*50)
+            print("✅ SUCCESS! Deoxys damage relations added!")
+            print("="*50)
+            
+            # Verify the data was inserted
+            print("\n📊 Verifying damage relations for Deoxys:")
+            print("-"*40)
+            
+            tables_to_check = [
+                ('DoubleDamageFromChart', 'Weak to (2x):'),
+                ('DoubleDamageToChart', 'Strong against (2x):'),
+                ('HalfDamageFromChart', 'Resists (0.5x):'),
+                ('HalfDamageToChart', 'Not very effective (0.5x):'),
+            ]
+            
+            for table, label in tables_to_check:
+                cur.execute(f"""
+                    SELECT ARRAY_AGG(t.type_name) as types
+                    FROM {table} d
+                    JOIN TypeChart t ON d.type_id = t.type_id
+                    WHERE d.pokemon_id = %s
+                """, (deoxys_id,))
+                result = cur.fetchone()
+                if result and result['types']:
+                    print(f"   {label} {result['types']}")
+                else:
+                    print(f"   {label} (none)")
+            
+        conn.close()
+        
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        if conn:
+            conn.rollback()
+            conn.close()
+
+if __name__ == "__main__":
+    add_deoxys_damage_relations()

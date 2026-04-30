@@ -11,11 +11,11 @@ import { router } from 'expo-router';
 
 export default function StartScreen() {
   const goToPokedex = () => {
-    router.push('/pokedex'); //If clicked pushes to scanner file
+    router.push('/pokedex'); 
   };
 
   const goToAIScanner = () => {
-    router.push('/scanner'); //If clicked pushes to scanner file
+    router.push('/scanner'); 
   };
 
   return (
