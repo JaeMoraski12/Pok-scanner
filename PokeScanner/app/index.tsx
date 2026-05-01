@@ -85,10 +85,10 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   pokedexButton: {
-    backgroundColor: '#3498db', // Blue for Pokedex
+    backgroundColor: '#3498db',
   },
   aiButton: {
-    backgroundColor: '#e74c3c', // Red for AI Scanner
+    backgroundColor: '#e74c3c',
   },
   buttonText: {
     color: 'white',

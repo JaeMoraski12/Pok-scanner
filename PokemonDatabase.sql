@@ -75,7 +75,7 @@ CREATE TABLE PokemonTypes (
 CREATE TABLE PokemonEvolutions (
     evolution_id SERIAL PRIMARY KEY,
     pokemon_id INTEGER NOT NULL REFERENCES Pokemon(pokemon_id),
-    evolves_from_id INTEGER REFERENCES Pokemon(pokemon_id),
+    evolves_from_id INTEGER REFERENCES Pokemon(pokemon_id), --this one is not being used
     evolves_to_id INTEGER REFERENCES Pokemon(pokemon_id),
     evolution_stage INTEGER,
     UNIQUE(pokemon_id, evolves_to_id)
@@ -95,16 +95,16 @@ CREATE INDEX idx_evolutions_to ON PokemonEvolutions(evolves_to_id);
 --     PRIMARY KEY (pokemon_id, game_id)
 -- );
 
-CREATE TABLE AiImagesChart (
-    ai_image_id SERIAL PRIMARY KEY,
-    image_name VARCHAR(500) NOT NULL
-);
+-- CREATE TABLE AiImagesChart (
+--     ai_image_id SERIAL PRIMARY KEY,
+--     image_name VARCHAR(500) NOT NULL
+-- );
 
-CREATE TABLE AiImageAllocation (
-    pokemon_id INTEGER REFERENCES Pokemon(pokemon_id),
-    ai_image_id INTEGER REFERENCES AiImagesChart(ai_image_id),
-    generation_id INTEGER REFERENCES GenerationChart(generation_id),
-    PRIMARY KEY (pokemon_id, ai_image_id, generation_id)
-);
+-- CREATE TABLE AiImageAllocation (
+--     pokemon_id INTEGER REFERENCES Pokemon(pokemon_id),
+--     ai_image_id INTEGER REFERENCES AiImagesChart(ai_image_id),
+--     generation_id INTEGER REFERENCES GenerationChart(generation_id),
+--     PRIMARY KEY (pokemon_id, ai_image_id, generation_id)
+-- );
 
 
