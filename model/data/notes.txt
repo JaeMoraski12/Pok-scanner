@@ -1,0 +1,5 @@
+Pixel ranges in background to place sprites: (140,65)-(216,33)
+
+commands to run: 
+python backgroundParcer.py --backgrounds ./Backgrounds --sprites ./Sprites/Generation_3 --output ./output --num-var 10
+python ImagePreProcessor.py ./output ./newoutput --copies 5 --max-rotation 20.0 --img-size 96
