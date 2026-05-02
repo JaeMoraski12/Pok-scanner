@@ -21,7 +21,7 @@ app.add_middleware(
 IMAGES_FOLDER = Path(r"C:\Users\jaeli\OneDrive\Documents\William and Mary\Junior\Spring 26\Fundamental of AI\Pokemon AI generator\Pok-scanner\PokemonImagesDB")
 
 USE_LOCALHOST = True # Set to False when testing on phone
-COMPUTER_IP = "100.66.101.40"  # Set your IP here
+COMPUTER_IP = "XX.XX.XX.XX"  # Set your IP here
 
 if USE_LOCALHOST:
     BASE_URL = "http://localhost:5000"
