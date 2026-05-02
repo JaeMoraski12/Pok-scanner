@@ -13,7 +13,7 @@ import {
     RefreshControl,
     Platform
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';  // Add useLocalSearchParams
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface Pokemon {
@@ -27,6 +27,7 @@ interface Pokemon {
 }
 
 export default function PokedexScreen() {
+    const params = useLocalSearchParams();  // Get navigation params
     const [pokemon, setPokemon] = useState<Pokemon[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -41,20 +42,15 @@ export default function PokedexScreen() {
     const [loadingDamage, setLoadingDamage] = useState(false);
 
     const getApiUrl = () => {
-    // For web browser testing on computer
         if (Platform.OS === 'web') {
             return 'http://localhost:5000';
         }
-        // For iOS simulator
         if (Platform.OS === 'ios' && !Platform.isPad) {
             return 'http://localhost:5000';
         } 
-        // For Android emulator
         if (Platform.OS === 'android') {
             return 'http://10.0.2.2:5000';
         }
-        // For physical device (iPhone/Android phone)
-        // You need to change this to your computer's actual IP on your network
         return 'http://100.66.101.40:5000';
     };
 
@@ -63,6 +59,28 @@ export default function PokedexScreen() {
     useEffect(() => {
         fetchPokemon();
     }, []);
+
+    // Handle params from scanner
+    useEffect(() => {
+        console.log('Params received:', params);
+        
+        if (params.selectedPokemon && params.autoOpenModal === 'true') {
+            try {
+                const pokemonData = JSON.parse(params.selectedPokemon as string);
+                console.log('Opening modal for Pokemon:', pokemonData.pokemon_name);
+                
+                setSelectedPokemon(pokemonData);
+                fetchEvolutions(pokemonData.pokemon_id);
+                fetchDamageRelations(pokemonData.pokemon_id);
+                setModalVisible(true);
+                
+                // Clear params to prevent re-opening on refresh
+                router.setParams({ selectedPokemon: undefined, autoOpenModal: undefined });
+            } catch (error) {
+                console.error('Error parsing selected Pokemon:', error);
+            }
+        }
+    }, [params.selectedPokemon, params.autoOpenModal]);
 
     const fetchPokemon = async () => {
         try {
@@ -82,18 +100,15 @@ export default function PokedexScreen() {
         fetchPokemon();
     };
 
-    // Apply sorting and filtering
     const getSortedAndFilteredPokemon = () => {
         let filtered = [...pokemon];
         
-        // Apply search filter
         if (searchQuery) {
             filtered = filtered.filter(p =>
                 p.pokemon_name.toLowerCase().includes(searchQuery.toLowerCase())
             );
         }
         
-        // Apply sorting
         filtered.sort((a, b) => {
             let comparison = 0;
             if (sortBy === 'number') {
