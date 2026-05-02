@@ -78,20 +78,25 @@ export default function ScannerScreen() {
   }
 
   //TODO: Send to AI here
-  const handleUsePhoto = () => {
+  const handleUsePhoto = async () => {
     setShowPreview(false);
-    Alert.alert(
-      'Photo Accepted',
-      'This is where the AI will scan the photo!',
-      [
-        {
-          text: 'ok',
-          onPress: () => {
-            setCapturedPhoto(null);
-          }
-        }
-      ]
-    );
+
+    const file = {
+      uri: capturedPhoto!,
+      name: 'pokemon.jpg',
+      type: 'image/jpeg'
+    } as any; // Type assertion for React Native file
+    
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await fetch("http://localhost:8000/api/predict", {
+      method: "POST",
+      body: formData,
+    });
+
+    const data = await res.json();
+    console.log(data);
   };
 
   const PreviewModal = () => (
