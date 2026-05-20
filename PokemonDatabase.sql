@@ -21,7 +21,7 @@ CREATE TABLE Pokemon (
     pokemon_name VARCHAR(50) UNIQUE NOT NULL,                                                                                                            
     pokemon_speed INT NOT NULL,
     generation_id INTEGER NOT NULL REFERENCES GenerationChart(generation_id),
-    image_URL VARCHAR(500)                          
+    image_data VARCHAR(500)                          
 );
 
 CREATE TABLE DoubleDamageFromChart (

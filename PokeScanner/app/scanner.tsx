@@ -78,99 +78,99 @@ export default function ScannerScreen() {
   }
 
   //TODO: Send to AI here
-  const handleUsePhoto = async () => {
+const handleUsePhoto = async () => {
     setShowPreview(false);
 
     try {
-      const photoUri = capturedPhoto!;
-      
-      // Show loading indicator
-      Alert.alert('Processing', 'Analyzing Pokemon...');
-      
-      // Convert image to base64
-      const response = await fetch(photoUri);
-      const blob = await response.blob();
-      
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        try {
-          const base64String = reader.result;
-          
-          // Use the base64 endpoint
-          const res = await fetch("http://localhost:8000/api/predict-base64", {
-            method: "POST",
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ 
-              image: base64String
-            }),
-          });
-          
-          const data = await res.json();
-          
-          if (res.ok) {
-            const predictedPokemon = data.Prediction;
-            
-            // Now fetch the full Pokemon details from your Database API
-            const pokemonDetails = await fetchPokemonByName(predictedPokemon);
-            
-            if (pokemonDetails) {
-              // Navigate to pokedex with the selected Pokemon
-              router.push({
-                pathname: '/pokedex',
-                params: { 
-                  selectedPokemon: JSON.stringify(pokemonDetails),
-                  autoOpenModal: 'true'
+        const photoUri = capturedPhoto!;
+        
+        // Show loading indicator
+        Alert.alert('Processing', 'Analyzing Pokemon...');
+        
+        // Convert image to base64
+        const response = await fetch(photoUri);
+        const blob = await response.blob();
+        
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+            try {
+                const base64String = reader.result;
+                
+                // Use your computer's IP address (same as DatabaseToPokedex)
+                const API_URL = 'http://100.66.101.40:8000'; // Your computer's IP
+                
+                const res = await fetch(`${API_URL}/api/predict-base64`, {
+                    method: "POST",
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        image: base64String
+                    }),
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok) {
+                    const predictedPokemon = data.Prediction;
+                    
+                    // Use your computer's IP for the database API
+                    const DB_API_URL = 'http://100.66.101.40:5000';
+                    const pokemonDetails = await fetchPokemonByName(predictedPokemon, DB_API_URL);
+                    
+                    if (pokemonDetails) {
+                        router.push({
+                            pathname: '/pokedex',
+                            params: { 
+                                selectedPokemon: JSON.stringify(pokemonDetails),
+                                autoOpenModal: 'true'
+                            }
+                        });
+                    } else {
+                        Alert.alert(
+                            'Pokemon Detected!', 
+                            `This looks like ${predictedPokemon}!\n\nBut we couldn't find details in the Pokédex.`,
+                            [{ text: 'OK' }]
+                        );
+                    }
+                } else {
+                    Alert.alert('Error', data.detail || 'Failed to analyze photo');
                 }
-              });
-            } else {
-              Alert.alert(
-                'Pokemon Detected!', 
-                `This looks like ${predictedPokemon}!\n\nBut we couldn't find details in the Pokédex.`,
-                [{ text: 'OK' }]
-              );
+            } catch (error) {
+                console.error('Error in upload:', error);
+                Alert.alert('Error', 'Failed to analyze photo');
             }
-          } else {
-            Alert.alert('Error', data.detail || 'Failed to analyze photo');
-          }
-        } catch (error) {
-          console.error('Error in upload:', error);
-          Alert.alert('Error', 'Failed to analyze photo');
-        }
-      };
-      
-      reader.readAsDataURL(blob);
-      
+        };
+        
+        reader.readAsDataURL(blob);
+        
     } catch (error) {
-      console.error('Error reading photo:', error);
-      Alert.alert('Error', 'Failed to process photo');
+        console.error('Error reading photo:', error);
+        Alert.alert('Error', 'Failed to process photo');
     }
-  };
+};
 
-  // Helper function to fetch Pokemon by name
-  const fetchPokemonByName = async (name: string) => {
+// Helper function to fetch Pokemon by name - updated to accept API URL
+const fetchPokemonByName = async (name: string, apiUrl: string) => {
     try {
-      // First, get all Pokemon and find by name (case-insensitive)
-      const response = await fetch("http://localhost:5000/api/pokemon");
-      const allPokemon = await response.json();
-      
-      const found = allPokemon.find(
-        (p: any) => p.pokemon_name.toLowerCase() === name.toLowerCase()
-      );
-      
-      if (found) {
-        // Fetch full details including evolutions and damage relations
-        const detailsResponse = await fetch(`http://localhost:5000/api/pokemon/${found.pokemon_id}`);
-        const details = await detailsResponse.json();
-        return details;
-      }
-      return null;
+        const response = await fetch(`${apiUrl}/api/pokemon`);
+        const allPokemon = await response.json();
+        
+        const found = allPokemon.find(
+            (p: any) => p.pokemon_name.toLowerCase() === name.toLowerCase()
+        );
+        
+        if (found) {
+            const detailsResponse = await fetch(`${apiUrl}/api/pokemon/${found.pokemon_id}`);
+            const details = await detailsResponse.json();
+            return details;
+        }
+        return null;
     } catch (error) {
-      console.error('Error fetching Pokemon details:', error);
-      return null;
+        console.error('Error fetching Pokemon details:', error);
+        return null;
     }
-  };
+};
     
   const PreviewModal = () => (
     <Modal

@@ -18,9 +18,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-IMAGES_FOLDER = Path(r"C:\Users\jaeli\OneDrive\Documents\William and Mary\Junior\Spring 26\Fundamental of AI\Pokemon AI generator\Pok-scanner\PokemonImagesDB")
+IMAGES_FOLDER = Path(r"..\..\PokemonImagesDB")
 
-USE_LOCALHOST = True # Set to False when testing on phone
+USE_LOCALHOST = False # Set to False when testing on phone
 COMPUTER_IP = "100.66.101.40"  # Set your IP here
 
 if USE_LOCALHOST:
