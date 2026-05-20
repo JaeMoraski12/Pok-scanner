@@ -9,17 +9,40 @@ import {
   Alert,
   Image,
   Modal,
-} from 'react-native';
-import { CameraView, useCameraPermissions, CameraType } from 'expo-camera';
-import { router } from 'expo-router';
+  Platform,
+} from "react-native";
+import { CameraView, useCameraPermissions, CameraType } from "expo-camera";
+import { router } from "expo-router";
 
 export default function ScannerScreen() {
-  const [facing, setFacing] = useState<CameraType>('back');
+  const [facing, setFacing] = useState<CameraType>("back");
   const [permission, requestPermission] = useCameraPermissions();
   const [isTakingPhoto, setIsTakingPhoto] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false); // New: for AI processing
   const cameraRef = useRef<CameraView>(null);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+
+  // Get API URLs based on platform
+  const getApiUrl = () => {
+    const COMPUTER_IP = "100.66.101.40"; // Your computer's IP
+    if (Platform.OS === "web") return "http://localhost:5000";
+    if (Platform.OS === "ios" && !Platform.isPad)
+      return "http://localhost:5000";
+    if (Platform.OS === "android") return `http://${COMPUTER_IP}:5000`;
+    return `http://${COMPUTER_IP}:5000`;
+  };
+
+  const getAiApiUrl = () => {
+    const COMPUTER_IP = "100.66.101.40"; // Your computer's IP
+    if (Platform.OS === "android") {
+      return `http://${COMPUTER_IP}:8000`;
+    }
+    return "http://localhost:8000";
+  };
+
+  const API_BASE_URL = getApiUrl();
+  const AI_API_URL = getAiApiUrl();
 
   if (!permission) {
     return (
@@ -33,10 +56,13 @@ export default function ScannerScreen() {
   if (!permission.granted) {
     return (
       <View style={styles.centerContainer}>
-        <Text style={styles.messageText}>We need camera access to scan Pokémon</Text>
+        <Text style={styles.messageText}>
+          We need camera access to scan Pokémon
+        </Text>
         <TouchableOpacity
           style={styles.permissionButton}
-          onPress={requestPermission}>
+          onPress={requestPermission}
+        >
           <Text style={styles.permissionButtonText}>Grant Permission</Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -51,7 +77,7 @@ export default function ScannerScreen() {
 
   // --- Camera Controls ---
   const toggleCameraFacing = () => {
-    setFacing(current => (current === 'back' ? 'front' : 'back'));
+    setFacing((current) => (current === "back" ? "front" : "back"));
   };
 
   const takePicture = async () => {
@@ -65,7 +91,8 @@ export default function ScannerScreen() {
         setCapturedPhoto(photo.uri);
         setShowPreview(true);
       } catch (error) {
-        console.error('Error taking photo:', error);
+        console.error("Error taking photo:", error);
+        Alert.alert("Error", "Failed to take photo. Please try again.");
       } finally {
         setIsTakingPhoto(false);
       }
@@ -75,103 +102,92 @@ export default function ScannerScreen() {
   const handleRetake = () => {
     setShowPreview(false);
     setCapturedPhoto(null);
-  }
+  };
 
-  //TODO: Send to AI here
-const handleUsePhoto = async () => {
+  // Send to AI and navigate to Pokédex
+  const handleUsePhoto = async () => {
+    if (!capturedPhoto) return;
+
     setShowPreview(false);
+    setIsProcessing(true);
 
     try {
-        const photoUri = capturedPhoto!;
-        
-        // Show loading indicator
-        Alert.alert('Processing', 'Analyzing Pokemon...');
-        
-        // Convert image to base64
-        const response = await fetch(photoUri);
-        const blob = await response.blob();
-        
+      // Show loading indicator
+      Alert.alert("Processing", "Identifying Pokémon...", [{ text: "Wait" }], {
+        cancelable: false,
+      });
+
+      // Convert image to base64
+      const response = await fetch(capturedPhoto);
+      const blob = await response.blob();
+      const base64 = await new Promise<string>((resolve) => {
         const reader = new FileReader();
-        reader.onloadend = async () => {
-            try {
-                const base64String = reader.result;
-                
-                // Use your computer's IP address (same as DatabaseToPokedex)
-                const API_URL = 'http://100.66.101.40:8000'; // Your computer's IP
-                
-                const res = await fetch(`${API_URL}/api/predict-base64`, {
-                    method: "POST",
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ 
-                        image: base64String
-                    }),
-                });
-                
-                const data = await res.json();
-                
-                if (res.ok) {
-                    const predictedPokemon = data.Prediction;
-                    
-                    // Use your computer's IP for the database API
-                    const DB_API_URL = 'http://100.66.101.40:5000';
-                    const pokemonDetails = await fetchPokemonByName(predictedPokemon, DB_API_URL);
-                    
-                    if (pokemonDetails) {
-                        router.push({
-                            pathname: '/pokedex',
-                            params: { 
-                                selectedPokemon: JSON.stringify(pokemonDetails),
-                                autoOpenModal: 'true'
-                            }
-                        });
-                    } else {
-                        Alert.alert(
-                            'Pokemon Detected!', 
-                            `This looks like ${predictedPokemon}!\n\nBut we couldn't find details in the Pokédex.`,
-                            [{ text: 'OK' }]
-                        );
-                    }
-                } else {
-                    Alert.alert('Error', data.detail || 'Failed to analyze photo');
-                }
-            } catch (error) {
-                console.error('Error in upload:', error);
-                Alert.alert('Error', 'Failed to analyze photo');
-            }
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          // Remove data:image/jpeg;base64, prefix
+          const base64Data = result.split(",")[1];
+          resolve(base64Data);
         };
-        
         reader.readAsDataURL(blob);
-        
-    } catch (error) {
-        console.error('Error reading photo:', error);
-        Alert.alert('Error', 'Failed to process photo');
-    }
-};
+      });
 
-// Helper function to fetch Pokemon by name - updated to accept API URL
-const fetchPokemonByName = async (name: string, apiUrl: string) => {
-    try {
-        const response = await fetch(`${apiUrl}/api/pokemon`);
-        const allPokemon = await response.json();
-        
-        const found = allPokemon.find(
-            (p: any) => p.pokemon_name.toLowerCase() === name.toLowerCase()
+      // Step 1: Send to AI for prediction
+      const aiResponse = await fetch(`${AI_API_URL}/api/predict-base64`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          image: base64,
+          filename: "pokemon.jpg",
+        }),
+      });
+
+      if (!aiResponse.ok) {
+        throw new Error("AI prediction failed");
+      }
+
+      const aiResult = await aiResponse.json();
+      const predictedPokemonName = aiResult.Prediction.toLowerCase();
+      console.log("AI Predicted:", predictedPokemonName);
+
+      // Step 2: Fetch Pokémon data from database
+      const pokemonResponse = await fetch(
+        `${API_BASE_URL}/api/pokemon/by-name/${predictedPokemonName}`,
+      );
+
+      if (!pokemonResponse.ok) {
+        throw new Error(
+          `Pokémon "${predictedPokemonName}" not found in database`,
         );
-        
-        if (found) {
-            const detailsResponse = await fetch(`${apiUrl}/api/pokemon/${found.pokemon_id}`);
-            const details = await detailsResponse.json();
-            return details;
-        }
-        return null;
+      }
+
+      const pokemonData = await pokemonResponse.json();
+      console.log("Pokemon data:", pokemonData);
+
+      // Step 3: Navigate to Pokédex with the Pokémon data
+      router.push({
+        pathname: "/pokedex",
+        params: {
+          selectedPokemon: JSON.stringify(pokemonData),
+          autoOpenModal: "true",
+        },
+      });
+
+      // Clear the captured photo
+      setCapturedPhoto(null);
     } catch (error) {
-        console.error('Error fetching Pokemon details:', error);
-        return null;
+      console.error("Error processing photo:", error);
+      Alert.alert(
+        "Identification Failed",
+        "Could not identify this Pokémon. Please try again with a clearer photo.",
+        [{ text: "OK", onPress: () => setCapturedPhoto(null) }],
+      );
+    } finally {
+      setIsProcessing(false);
     }
-};
-    
+  };
+
   const PreviewModal = () => (
     <Modal
       visible={showPreview}
@@ -196,14 +212,18 @@ const fetchPokemonByName = async (name: string, apiUrl: string) => {
           <TouchableOpacity
             style={[styles.modalButton, styles.useButton]}
             onPress={handleUsePhoto}
+            disabled={isProcessing}
           >
-            <Text style={styles.buttonText}>Use This Photo</Text>
+            {isProcessing ? (
+              <ActivityIndicator color="white" size="small" />
+            ) : (
+              <Text style={styles.buttonText}>Use This Photo</Text>
+            )}
           </TouchableOpacity>
         </View>
       </View>
     </Modal>
   );
-
 
   // --- Main Screen UI ---
   return (
@@ -247,6 +267,17 @@ const fetchPokemonByName = async (name: string, apiUrl: string) => {
       </View>
 
       <PreviewModal />
+
+      {/* Processing Modal */}
+      <Modal visible={isProcessing} transparent={true} animationType="fade">
+        <View style={styles.processingContainer}>
+          <View style={styles.processingBox}>
+            <ActivityIndicator size="large" color="#e74c3c" />
+            <Text style={styles.processingText}>Identifying Pokémon...</Text>
+            <Text style={styles.processingSubtext}>This may take a moment</Text>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -255,131 +286,131 @@ const fetchPokemonByName = async (name: string, apiUrl: string) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'black',
+    backgroundColor: "black",
   },
   camera: {
     flex: 1,
   },
   overlay: {
     flex: 1,
-    backgroundColor: 'transparent',
-    justifyContent: 'space-between',
+    backgroundColor: "transparent",
+    justifyContent: "space-between",
     paddingVertical: 50,
   },
   scanText: {
-    textAlign: 'center',
-    color: 'white',
+    textAlign: "center",
+    color: "white",
     fontSize: 18,
-    fontWeight: '600',
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    fontWeight: "600",
+    backgroundColor: "rgba(0,0,0,0.6)",
     paddingVertical: 8,
     paddingHorizontal: 16,
-    alignSelf: 'center',
+    alignSelf: "center",
     borderRadius: 20,
     marginTop: 20,
   },
   captureButton: {
-    alignSelf: 'center',
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    alignSelf: "center",
+    backgroundColor: "rgba(255,255,255,0.3)",
     width: 80,
     height: 80,
     borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 30,
   },
   captureButtonInner: {
     width: 70,
     height: 70,
     borderRadius: 35,
-    backgroundColor: 'white',
+    backgroundColor: "white",
     borderWidth: 2,
-    borderColor: '#e74c3c'
+    borderColor: "#e74c3c",
   },
   flipButton: {
-    position: 'absolute',
+    position: "absolute",
     top: 60,
     right: 20,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: "rgba(0,0,0,0.6)",
     width: 50,
     height: 50,
     borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   flipButtonText: {
-    color: 'white',
+    color: "white",
     fontSize: 28,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   closeButton: {
-    position: 'absolute',
+    position: "absolute",
     top: 60,
     left: 20,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: "rgba(0,0,0,0.6)",
     width: 50,
     height: 50,
     borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center'
+    justifyContent: "center",
+    alignItems: "center",
   },
   closeButtonText: {
-    color: 'white',
+    color: "white",
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   centerContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f5f5f5",
     padding: 20,
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#666'
+    color: "#666",
   },
   messageText: {
     fontSize: 18,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: 20,
-    color: '#333',
+    color: "#333",
   },
   permissionButton: {
-    backgroundColor: '#e74c3c',
+    backgroundColor: "#e74c3c",
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 10,
     marginBottom: 15,
   },
   permissionButtonText: {
-    color: 'white',
+    color: "white",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   backButton: {
-    backgroundColor: '#3498db',
+    backgroundColor: "#3498db",
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 10,
   },
   backButtonText: {
-    color: 'white',
+    color: "white",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#f5f5f5",
+    alignItems: "center",
+    justifyContent: "center",
     padding: 20,
   },
   modalTitle: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: '#2c3e50',
+    fontWeight: "bold",
+    color: "#2c3e50",
     marginBottom: 20,
   },
   previewImage: {
@@ -388,36 +419,59 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginBottom: 30,
     borderWidth: 3,
-    borderColor: '#e74c3c'
+    borderColor: "#e74c3c",
   },
   questionText: {
     fontSize: 22,
-    fontWeight: '600',
-    color: '#2c3e50',
+    fontWeight: "600",
+    color: "#2c3e50",
     marginBottom: 30,
-    textAlign: 'center',
+    textAlign: "center",
   },
   modalButtons: {
-    flexDirection: 'column',
-    fontWeight: 'bold',
-    color: '#2c3e50',
-    marginBottom: 30,
-    textAlign: 'center',
+    flexDirection: "row",
+    gap: 15,
+    justifyContent: "center",
   },
   modalButton: {
     paddingVertical: 15,
+    paddingHorizontal: 25,
     borderRadius: 10,
-    alignItems: 'center',
+    alignItems: "center",
+    minWidth: 140,
   },
   retakeButton: {
-    backgroundColor: '#f39c12'
+    backgroundColor: "#f39c12",
   },
   useButton: {
-    backgroundColor: '#2ecc71',
+    backgroundColor: "#2ecc71",
   },
   buttonText: {
-    color: 'white',
+    color: "white",
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
+  },
+  processingContainer: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  processingBox: {
+    backgroundColor: "white",
+    padding: 30,
+    borderRadius: 20,
+    alignItems: "center",
+    gap: 15,
+    minWidth: 250,
+  },
+  processingText: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#2c3e50",
+  },
+  processingSubtext: {
+    fontSize: 14,
+    color: "#999",
   },
 });

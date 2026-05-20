@@ -21,7 +21,7 @@ app.add_middleware(
 IMAGES_FOLDER = Path(r"..\..\PokemonImagesDB")
 
 USE_LOCALHOST = False # Set to False when testing on phone
-COMPUTER_IP = "100.66.101.40"  # Set your IP here
+COMPUTER_IP = "192.168.12.186"  # Set your IP here
 
 if USE_LOCALHOST:
     BASE_URL = "http://localhost:5000"
@@ -445,6 +445,41 @@ def get_damage_relations(pokemon_id: int):
             result['deals_no_damage_to'] = row['types'] if row['types'] else []
     
     return result
+
+@app.get("/api/pokemon/by-name/{name}")
+def get_pokemon_by_name(name: str):
+    """Get a specific Pokemon by name"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    cur.execute("""
+        SELECT 
+            p.pokemon_id,
+            p.national_dex_number,
+            p.pokemon_name,
+            p.pokemon_speed,
+            p.generation_id,
+            p.image_url,
+            ARRAY_AGG(DISTINCT t.type_name) as types
+        FROM Pokemon p
+        JOIN PokemonTypes pt ON p.pokemon_id = pt.pokemon_id
+        JOIN TypeChart t ON pt.type_id = t.type_id
+        WHERE p.pokemon_name ILIKE %s
+        GROUP BY p.pokemon_id, p.national_dex_number, p.pokemon_name, 
+                 p.pokemon_speed, p.generation_id, p.image_url
+    """, (name,))
+    
+    pokemon = cur.fetchone()
+    cur.close()
+    conn.close()
+    
+    if not pokemon:
+        raise HTTPException(status_code=404, detail="Pokemon not found")
+    
+    pokemon_dict = dict(pokemon)
+    pokemon_dict['image_url'] = f"{BASE_URL}/api/images/pokemon/{pokemon_dict['pokemon_id']}"
+    
+    return pokemon_dict
 
 
 if __name__ == "__main__":
